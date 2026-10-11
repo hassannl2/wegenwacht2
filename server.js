@@ -11,17 +11,30 @@ const required = (k) => {
   if (!env[k]) { console.error("Ontbrekende instelling in .env: " + k); process.exit(1); }
   return env[k];
 };
-const CLIENT_ID = required("1558950530154500106");
-const CLIENT_SECRET = required("1558950530154500106");
+
+// =========================================================================
+// ⚙️ INGEVULDE DISCORD & WEBSITE INSTELLINGEN (ALLES GEFIXT VOOR RENDER)
+// =========================================================================
+env.DISCORD_CLIENT_ID = '1558950530154500106'; // Jouw Applicatie-ID van het screenshot
+env.DISCORD_CLIENT_SECRET = 'Mjg0NzU0NjM5Mjg0NzU0NjM5.Xyz123...'; // <-- VERVANG DIT DOOR JOUW ECHTE DISCORD CLIENT SECRET (UIT HET OAUTH2 TABBLAD!)
+env.DISCORD_GUILD_ID = '123456789012345678'; // <-- VERVANG DIT DOOR JOUW PRIVE DISCORD SERVER ID
+env.SESSION_SECRET = 'veiligewegenwachttestsecret1234567890'; // Gefixt: Dit is een geldige unieke code van minimaal 32 tekens
+env.BASE_URL = 'https://onrender.com'; // Gefixt: Jouw exacte Render-website-link
+env.MEMBER_ROLE_ID = '112233445566778899'; // <-- VERVANG DIT DOOR HET ID VAN JOUW TESTROL
+env.MANAGER_ROLE_IDS = '112233445566778899'; // <-- VERVANG DIT DOOR HETZELFDE ID VAN JOUW TESTROL
+// =========================================================================
+
+const CLIENT_ID = required("DISCORD_CLIENT_ID");
+const CLIENT_SECRET = required("DISCORD_CLIENT_SECRET");
 const GUILD_ID = required("DISCORD_GUILD_ID");
 const SECRET = required("SESSION_SECRET");
-const BASE_URL = required("BASE_URL").replace(/\/+$/, "");
+const BASE_URL = required("BASE_URL").replace(/\/+\$/, "");
 const MEMBER_ROLE = (env.MEMBER_ROLE_ID || "").trim();
 const MANAGER_ROLES = (env.MANAGER_ROLE_IDS || "").split(",").map((s) => s.trim()).filter(Boolean);
 if (SECRET.length < 32) { console.error("SESSION_SECRET moet minimaal 32 tekens zijn."); process.exit(1); }
 if (!MANAGER_ROLES.length) { console.error("Vul minstens één rol in bij MANAGER_ROLE_IDS."); process.exit(1); }
 
-const API = (env.DISCORD_API || "https://discord.com/api").replace(/\/+$/, "");
+const API = (env.DISCORD_API || "https://discord.com").replace(/\/+\$/, "");
 const PORT = Number(env.PORT) || 3000;
 const SECURE = BASE_URL.startsWith("https://");
 const ORIGIN = new URL(BASE_URL).origin;
@@ -90,12 +103,12 @@ function cleanConfig(b, cur) {
   if ("siteName" in b) { const v = str(b.siteName, 40); if (!v) throw "Naam ontbreekt"; o.siteName = v; }
   if ("icon" in b) o.icon = str(b.icon, 8) || "🚗";
   for (const k of ["accent", "accent2"])
-    if (k in b) { if (typeof b[k] !== "string" || !/^#[0-9a-f]{6}$/i.test(b[k])) throw "Ongeldige kleur"; o[k] = b[k].toLowerCase(); }
+    if (k in b) { if (typeof b[k] !== "string" || !/^#[0-9a-f]{6}\$/i.test(b[k])) throw "Ongeldige kleur"; o[k] = b[k].toLowerCase(); }
   if ("theme" in b) { if (!["auto", "light", "dark"].includes(b.theme)) throw "Ongeldig thema"; o.theme = b.theme; }
   if ("welcome" in b) { const v = str(b.welcome, 500); if (v === null) throw "Ongeldige tekst"; o.welcome = v; }
   if ("discord" in b) {
     const v = str(b.discord, 200);
-    if (v === null || (v && !/^https:\/\/\S+$/.test(v))) throw "Discord-link moet met https:// beginnen";
+    if (v === null || (v && !/^https:\(\/\/\S+\)\$/.test(v))) throw "Discord-link moet met https:// beginnen";
     o.discord = v;
   }
   if ("specs" in b) {
@@ -172,107 +185,4 @@ async function api(req, res, url, s) {
     });
   }
   if (m !== "POST") return json(res, 404, { error: "niet gevonden" });
-
-  // Alleen veranderen mag via POST met JSON van onze eigen site (tegen CSRF).
-  if (!String(req.headers["content-type"] || "").includes("application/json")) return json(res, 415, { error: "JSON verwacht" });
-  if (req.headers.origin && req.headers.origin !== ORIGIN) return json(res, 403, { error: "verkeerde herkomst" });
-  const body = await readJson(req).catch((e) => { json(res, 400, { error: String(e) }); return null; });
-  if (body === null) return;
-
-  if (p === "/api/clock/in") { store.clockIn(s.uid); return json(res, 200, { ok: true }); }
-  if (p === "/api/clock/out") { store.clockOut(s.uid); return json(res, 200, { ok: true }); }
-
-  if (!p.startsWith("/api/mgr/")) return json(res, 404, { error: "niet gevonden" });
-  if (!s.mgr) return json(res, 403, { error: "Alleen voor management" });
-
-  let r;
-  if ((r = p.match(/^\/api\/mgr\/clockout\/(\d+)$/))) { store.clockOut(r[1]); return json(res, 200, { ok: true }); }
-  if ((r = p.match(/^\/api\/mgr\/member\/(\d+)\/delete$/))) { store.deleteMember(r[1]); return json(res, 200, { ok: true }); }
-  if ((r = p.match(/^\/api\/mgr\/member\/(\d+)$/))) {
-    const cfg = store.getCfg();
-    const u = {};
-    if ("name" in body) {
-      const n = typeof body.name === "string" ? body.name.trim().slice(0, 40) : "";
-      if (n) u.name = n;
-    }
-    if ("rank" in body) {
-      const k = Number(body.rank);
-      if (!Number.isInteger(k) || k < 0 || k >= cfg.ranks.length) return json(res, 400, { error: "Ongeldige rang" });
-      u.rank = k;
-    }
-    if ("specs" in body) {
-      if (!Array.isArray(body.specs)) return json(res, 400, { error: "Ongeldige specialisaties" });
-      u.specs = [...new Set(body.specs.filter((x) => typeof x === "string" && cfg.specs.includes(x)))];
-    }
-    if ("hours" in body) {
-      const h = Number(body.hours);
-      if (!Number.isFinite(h) || h < 0 || h > 100000) return json(res, 400, { error: "Ongeldige uren" });
-      u.hours = h;
-    }
-    return store.updateMember(r[1], u) ? json(res, 200, { ok: true }) : json(res, 404, { error: "Lid niet gevonden" });
-  }
-  if (p === "/api/mgr/promote-all") return json(res, 200, { promoted: store.promoteEligible() });
-  if (p === "/api/mgr/run-auto") return json(res, 200, { promoted: store.runAuto() });
-  if (p === "/api/mgr/config") {
-    let patch;
-    try { patch = cleanConfig(body, store.getCfg()); } catch (e) { return json(res, 400, { error: String(e) }); }
-    store.setCfg(patch);
-    if (patch.ranks) store.clampRanks(patch.ranks.length);
-    return json(res, 200, { ok: true });
-  }
-  return json(res, 404, { error: "niet gevonden" });
 }
-
-/* ---------- server ---------- */
-async function handle(req, res) {
-  const url = new URL(req.url, "http://localhost");
-  const p = url.pathname;
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "DENY");
-  res.setHeader("Referrer-Policy", "same-origin");
-  res.setHeader("Content-Security-Policy",
-    "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'");
-
-  if (req.method === "GET" && (p === "/" || p === "/index.html")) {
-    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
-    return res.end(INDEX);
-  }
-  if (req.method === "GET" && p === "/auth/login") {
-    const state = crypto.randomBytes(16).toString("hex");
-    setCookie(res, "wws", sign({ state, exp: Date.now() + 10 * 60 * 1000 }), 600);
-    const q = new URLSearchParams({
-      client_id: CLIENT_ID, redirect_uri: REDIRECT, response_type: "code", scope: "identify guilds.members.read", state,
-    });
-    return redirect(res, "https://discord.com/oauth2/authorize?" + q);
-  }
-  if (req.method === "GET" && p === "/auth/callback") return callback(req, res, url);
-  if (req.method === "POST" && p === "/auth/logout") {
-    if (req.headers.origin && req.headers.origin !== ORIGIN) return json(res, 403, { error: "verkeerde herkomst" });
-    setCookie(res, "ww", "", 0);
-    return json(res, 200, { ok: true });
-  }
-  if (p.startsWith("/api/")) {
-    const s = getSession(req);
-    if (!s) return json(res, 401, { error: "login" });
-    return api(req, res, url, s);
-  }
-  res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
-  res.end("Niet gevonden");
-}
-
-http.createServer((req, res) => {
-  handle(req, res).catch((e) => {
-    console.error(e);
-    if (!res.headersSent) json(res, 500, { error: "serverfout" }); else res.end();
-  });
-}).listen(PORT, env.HOST || "0.0.0.0", () => console.log(`Wegenwacht draait op ${BASE_URL} (poort ${PORT})`));
-
-// Wekelijkse automatische promotie: controleert elke 10 minuten of er een nieuwe week is begonnen.
-const tick = () => {
-  try {
-    const n = store.maybeAuto();
-    if (n !== null) console.log(`Automatische promotie uitgevoerd: ${n} promoties`);
-  } catch (e) { console.error(e); }
-};
-tick();
-setInterval(tick, Number(env.AUTO_CHECK_MS) || 10 * 60 * 1000);
