@@ -11,8 +11,8 @@ const required = (k) => {
   if (!env[k]) { console.error("Ontbrekende instelling in .env: " + k); process.exit(1); }
   return env[k];
 };
-const CLIENT_ID = required("DISCORD_CLIENT_ID");
-const CLIENT_SECRET = required("DISCORD_CLIENT_SECRET");
+const CLIENT_ID = required("1558950530154500106");
+const CLIENT_SECRET = required("1558950530154500106");
 const GUILD_ID = required("DISCORD_GUILD_ID");
 const SECRET = required("SESSION_SECRET");
 const BASE_URL = required("BASE_URL").replace(/\/+$/, "");
